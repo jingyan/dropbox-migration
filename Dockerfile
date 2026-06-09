@@ -15,5 +15,4 @@ RUN mkdir -p /data && chown nobody:nogroup /data
 
 USER nobody
 
-ENTRYPOINT ["dropbox-to-gdrive"]
-CMD ["migrate"]
+ENTRYPOINT ["sh", "-c", "dropbox-to-gdrive verify && exec dropbox-to-gdrive migrate"]
