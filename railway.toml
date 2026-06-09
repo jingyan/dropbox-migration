@@ -3,7 +3,7 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "dropbox-to-gdrive verify && dropbox-to-gdrive migrate"
+startCommand = "/docker-entrypoint.sh migrate"
 restartPolicyType = "NEVER"
 # CLI batch job — no HTTP server
 healthcheckPath = ""

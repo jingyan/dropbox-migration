@@ -13,6 +13,11 @@ RUN pip install --upgrade pip && pip install .
 
 RUN mkdir -p /data && chown nobody:nogroup /data
 
+COPY deploy/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 USER nobody
 
-ENTRYPOINT ["sh", "-c", "dropbox-to-gdrive verify && exec dropbox-to-gdrive migrate"]
+# migrate blocks until all pending files are processed, then exits
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["migrate"]
