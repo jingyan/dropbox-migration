@@ -10,6 +10,7 @@ Migrate files from a **Dropbox personal account** to a **Google Drive personal a
 - Dry-run mode
 - Per-file retry with exponential backoff
 - AWS Batch on Fargate deployment (Terraform included)
+- Railway deployment (`railway.toml` included)
 - Credentials via environment variables or AWS Secrets Manager
 
 ## Project layout
@@ -92,7 +93,9 @@ DRY_RUN=true dropbox-to-gdrive migrate
 | `GDRIVE_ROOT_FOLDER_NAME` | Folder name when using `root` | `Dropbox Migration` |
 | `CHECKPOINT_URI` | `file://...` or `s3://bucket/key` | `file:///tmp/checkpoint.json` |
 | `DRY_RUN` | List actions without uploading | `false` |
+| `FORCE_RELIST` | Rescan Dropbox instead of using cached manifest | `false` |
 | `CHUNK_SIZE_MB` | Download chunk size | `8` |
+| `MIGRATION_WORKERS` | Parallel file uploads (1 = sequential) | `1` |
 | `LOG_LEVEL` | Logging level | `INFO` |
 
 \*Not required when `SECRETS_MANAGER_ARN` is set.
@@ -109,6 +112,74 @@ DRY_RUN=true dropbox-to-gdrive migrate
   "google_refresh_token": "..."
 }
 ```
+
+## Railway deployment
+
+Railway works well for this — it's a long-running batch job, not a web server. Railway's US/EU datacenters can reach Google APIs without a proxy.
+
+### 1. Create a Railway project
+
+```bash
+# Install CLI: https://docs.railway.com/develop/cli
+railway login
+railway init
+```
+
+Or connect the GitHub repo at [railway.com/new](https://railway.com/new) and select `jingyan/dropbox-migration`.
+
+Railway reads `railway.toml` which runs `dropbox-to-gdrive migrate` and sets **Restart Policy: Never** (job exits when done).
+
+### 2. Add a volume for checkpoint (recommended)
+
+In the Railway dashboard:
+
+1. Service → **Volumes** → Add volume, mount path `/data`
+2. Set variable: `CHECKPOINT_URI=file:///data/checkpoint.json`
+
+Without a volume, checkpoint is lost on redeploy and migration restarts from scratch.
+
+Alternatively, use S3: `CHECKPOINT_URI=s3://your-bucket/checkpoint.json` plus `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`.
+
+### 3. Set environment variables
+
+In Railway → **Variables**, add everything from `.env.example`:
+
+```
+DROPBOX_APP_KEY=...
+DROPBOX_APP_SECRET=...
+DROPBOX_REFRESH_TOKEN=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REFRESH_TOKEN=...
+DROPBOX_ROOT_PATH=/Photos
+MIGRATION_WORKERS=4
+CHECKPOINT_URI=file:///data/checkpoint.json
+```
+
+No `HTTPS_PROXY` needed on Railway (unless you add one).
+
+### 4. Deploy
+
+```bash
+railway up
+```
+
+Watch logs in the Railway dashboard. When migration completes, deployment status shows **Success**.
+
+### 5. Resume after failure
+
+Redeploy or click **Redeploy** — checkpoint on the volume (or S3) picks up where it left off.
+
+To verify credentials first, temporarily change the start command to `dropbox-to-gdrive verify` in Railway settings, deploy, then switch back to `migrate`.
+
+### Railway tips
+
+| Setting | Recommendation |
+|---------|----------------|
+| **Memory** | 2 GB+ (files are buffered in memory during upload) |
+| **Restart policy** | `Never` — job should exit when finished |
+| **Workers** | `4` is a good default on Railway |
+| **Proxy** | Not needed |
 
 ## AWS Batch deployment
 

@@ -94,9 +94,10 @@ def main(argv: list[str] | None = None) -> int:
     checkpoint_store = CheckpointStore(config.checkpoint_uri, aws_region=config.aws_region)
     migrator = Migrator(
         config=config,
+        secrets=secrets,
+        checkpoint_store=checkpoint_store,
         dropbox_client=dropbox_client,
         gdrive_client=gdrive_client,
-        checkpoint_store=checkpoint_store,
     )
     result = migrator.run()
     return 0 if result.success else 1

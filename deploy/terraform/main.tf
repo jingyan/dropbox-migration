@@ -232,6 +232,7 @@ resource "aws_batch_job_definition" "migration" {
       { name = "SECRETS_MANAGER_ARN", value = aws_secretsmanager_secret.credentials.arn },
       { name = "CHECKPOINT_URI", value = "s3://${aws_s3_bucket.checkpoints.bucket}/checkpoint.json" },
       { name = "GDRIVE_ROOT_FOLDER_NAME", value = var.gdrive_root_folder_name },
+      { name = "MIGRATION_WORKERS", value = "4" },
       { name = "LOG_LEVEL", value = "INFO" }
     ]
   })

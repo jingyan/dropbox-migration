@@ -30,8 +30,10 @@ class Config:
     gdrive_root_folder_name: str = "Dropbox Migration"
     checkpoint_uri: str = "file:///tmp/checkpoint.json"
     dry_run: bool = False
+    force_relist: bool = False
     max_retries: int = 5
     chunk_size_mb: int = 8
+    workers: int = 1
     aws_region: str = "us-east-1"
     secrets_manager_arn: str | None = None
     log_level: str = "INFO"
@@ -59,8 +61,10 @@ class Config:
             checkpoint_uri=_env("CHECKPOINT_URI", "file:///tmp/checkpoint.json")
             or "file:///tmp/checkpoint.json",
             dry_run=_env_bool("DRY_RUN"),
+            force_relist=_env_bool("FORCE_RELIST"),
             max_retries=int(_env("MAX_RETRIES", "5") or "5"),
             chunk_size_mb=int(_env("CHUNK_SIZE_MB", "8") or "8"),
+            workers=max(1, int(_env("MIGRATION_WORKERS", "1") or "1")),
             aws_region=_env("AWS_REGION", "us-east-1") or "us-east-1",
             secrets_manager_arn=secrets_manager_arn,
             log_level=_env("LOG_LEVEL", "INFO") or "INFO",

@@ -1,0 +1,10 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "dropbox-to-gdrive migrate"
+restartPolicyType = "NEVER"
+# CLI batch job — no HTTP server
+healthcheckPath = ""
+healthcheckTimeout = 1

@@ -26,10 +26,12 @@ class MigrationStats:
 
 @dataclass
 class Checkpoint:
-    version: int = 1
+    version: int = 2
     started_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    dropbox_root_path: str | None = None
     gdrive_root_folder_id: str | None = None
+    file_manifest: dict[str, dict[str, object]] = field(default_factory=dict)
     completed_paths: set[str] = field(default_factory=set)
     failed_paths: dict[str, str] = field(default_factory=dict)
     stats: MigrationStats = field(default_factory=MigrationStats)
@@ -54,17 +56,26 @@ class Checkpoint:
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["completed_paths"] = sorted(self.completed_paths)
+        payload["file_manifest"] = {
+            rel_path: payload["file_manifest"][rel_path]
+            for rel_path in sorted(self.file_manifest)
+        }
         return payload
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Checkpoint:
         stats_data = data.get("stats") or {}
         stats = MigrationStats(**stats_data) if isinstance(stats_data, dict) else MigrationStats()
+        manifest = data.get("file_manifest") or {}
+        if not isinstance(manifest, dict):
+            manifest = {}
         return cls(
             version=int(data.get("version", 1)),
             started_at=str(data.get("started_at", datetime.now(UTC).isoformat())),
             updated_at=str(data.get("updated_at", datetime.now(UTC).isoformat())),
+            dropbox_root_path=data.get("dropbox_root_path"),
             gdrive_root_folder_id=data.get("gdrive_root_folder_id"),
+            file_manifest=dict(manifest),
             completed_paths=set(data.get("completed_paths") or []),
             failed_paths=dict(data.get("failed_paths") or {}),
             stats=stats,

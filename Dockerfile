@@ -11,6 +11,8 @@ COPY src ./src
 
 RUN pip install --upgrade pip && pip install .
 
+RUN mkdir -p /data && chown nobody:nogroup /data
+
 USER nobody
 
 ENTRYPOINT ["dropbox-to-gdrive"]

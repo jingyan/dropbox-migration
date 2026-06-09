@@ -24,6 +24,25 @@ class DropboxFile:
     content_hash: str | None
     server_modified: str | None
 
+    def to_dict(self) -> dict[str, str | int | None]:
+        return {
+            "path": self.path,
+            "name": self.name,
+            "size": self.size,
+            "content_hash": self.content_hash,
+            "server_modified": self.server_modified,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, object]) -> DropboxFile:
+        return cls(
+            path=str(data["path"]),
+            name=str(data["name"]),
+            size=int(data["size"]),  # type: ignore[arg-type]
+            content_hash=data.get("content_hash"),  # type: ignore[arg-type]
+            server_modified=data.get("server_modified"),  # type: ignore[arg-type]
+        )
+
 
 class DropboxClient:
     """Thin wrapper around the Dropbox SDK."""

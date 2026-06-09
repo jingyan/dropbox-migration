@@ -1,28 +1,25 @@
-from dropbox_to_gdrive.checkpoint import Checkpoint, CheckpointStore, MigrationStats
+from dropbox_to_gdrive.checkpoint import Checkpoint, CheckpointStore
+from dropbox_to_gdrive.dropbox_client import DropboxFile
 
 
-def test_checkpoint_roundtrip(tmp_path):
+def test_checkpoint_manifest_roundtrip(tmp_path):
     uri = f"file://{tmp_path / 'checkpoint.json'}"
     store = CheckpointStore(uri)
 
+    file_entry = DropboxFile(
+        path="/Photos/cat.jpg",
+        name="cat.jpg",
+        size=1024,
+        content_hash="abc",
+        server_modified="2024-01-01T00:00:00",
+    )
     checkpoint = Checkpoint(
-        gdrive_root_folder_id="folder123",
-        completed_paths={"docs/a.txt"},
-        stats=MigrationStats(files_discovered=1, files_migrated=1, bytes_migrated=10),
+        dropbox_root_path="/Photos",
+        file_manifest={"cat.jpg": file_entry.to_dict()},
     )
     store.save(checkpoint)
     loaded = store.load()
 
-    assert loaded.gdrive_root_folder_id == "folder123"
-    assert loaded.completed_paths == {"docs/a.txt"}
-    assert loaded.stats.files_migrated == 1
-    assert loaded.stats.bytes_migrated == 10
-
-
-def test_checkpoint_mark_completed():
-    checkpoint = Checkpoint()
-    checkpoint.mark_completed("photos/cat.jpg", 2048)
-
-    assert "photos/cat.jpg" in checkpoint.completed_paths
-    assert checkpoint.stats.files_migrated == 1
-    assert checkpoint.stats.bytes_migrated == 2048
+    assert loaded.dropbox_root_path == "/Photos"
+    assert loaded.file_manifest["cat.jpg"]["name"] == "cat.jpg"
+    assert DropboxFile.from_dict(loaded.file_manifest["cat.jpg"]).size == 1024
