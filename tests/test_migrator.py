@@ -77,6 +77,59 @@ def test_discover_files_rescans_when_manifest_missing():
     store.save.assert_called_once()
 
 
+def test_prebuild_folder_map_uses_cached_folders():
+    gdrive = MagicMock()
+    store = MagicMock()
+    checkpoint = Checkpoint(
+        folder_map={
+            "Photos": "gdrive-photos-id",
+            "Photos/2024": "gdrive-2024-id",
+        },
+    )
+    migrator = Migrator(
+        config=Config(dropbox_access_token="token"),
+        secrets=MagicMock(),
+        checkpoint_store=store,
+        dropbox_client=MagicMock(),
+        gdrive_client=gdrive,
+    )
+
+    migrator._prebuild_folder_map(
+        ["Photos/2024/new.jpg", "Photos/2024/another.jpg"],
+        "root-folder-id",
+        checkpoint,
+    )
+
+    gdrive.ensure_folder.assert_not_called()
+    assert migrator._folder_cache["Photos/2024"] == "gdrive-2024-id"
+
+
+def test_prebuild_folder_map_creates_only_missing_folders():
+    gdrive = MagicMock()
+    gdrive.ensure_folder.side_effect = ["gdrive-2024-id", "gdrive-vacation-id"]
+    store = MagicMock()
+    checkpoint = Checkpoint(folder_map={"Photos": "gdrive-photos-id"})
+    migrator = Migrator(
+        config=Config(dropbox_access_token="token"),
+        secrets=MagicMock(),
+        checkpoint_store=store,
+        dropbox_client=MagicMock(),
+        gdrive_client=gdrive,
+    )
+
+    migrator._prebuild_folder_map(
+        ["Photos/2024/vacation/img.jpg"],
+        "root-folder-id",
+        checkpoint,
+    )
+
+    assert gdrive.ensure_folder.call_count == 2
+    gdrive.ensure_folder.assert_any_call("2024", "gdrive-photos-id")
+    gdrive.ensure_folder.assert_any_call("vacation", "gdrive-2024-id")
+    assert checkpoint.folder_map["Photos/2024/vacation"] == "gdrive-vacation-id"
+    store.save.assert_called()
+
+
 def test_discover_files_rescans_when_force_relist_enabled():
     cached = _file("/Photos/a.jpg", "a.jpg")
     checkpoint = Checkpoint(

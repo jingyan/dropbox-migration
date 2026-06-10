@@ -91,7 +91,7 @@ DRY_RUN=true dropbox-to-gdrive migrate
 | `DROPBOX_ROOT_PATH` | Dropbox subfolder to migrate (e.g. `/Photos`) | `/` |
 | `GDRIVE_ROOT_FOLDER_ID` | Existing Drive folder ID | `root` |
 | `GDRIVE_ROOT_FOLDER_NAME` | Folder name when using `root` | `Dropbox Migration` |
-| `CHECKPOINT_URI` | `file://...` or `s3://bucket/key` | `file:///tmp/checkpoint.json` |
+| `CHECKPOINT_URI` | Base URI for split checkpoint files (see below) | `file:///tmp/checkpoint.json` |
 | `DRY_RUN` | List actions without uploading | `false` |
 | `FORCE_RELIST` | Rescan Dropbox instead of using cached manifest | `false` |
 | `CHUNK_SIZE_MB` | Download chunk size | `8` |
@@ -256,7 +256,17 @@ Monitor logs in CloudWatch: `/aws/batch/dropbox-to-gdrive`.
 
 ## Resume behavior
 
-Progress is saved after each file. Re-run the same job to continue from the checkpoint. The default Batch setup stores checkpoints at `s3://<bucket>/checkpoint.json`.
+Progress is saved after each file. Re-run the same job to continue from the checkpoint.
+
+`CHECKPOINT_URI` writes three companion files (same base path):
+
+| File | Contents | When saved |
+|------|----------|------------|
+| `checkpoint.json` | Completed paths, stats, root folder ID | After each file |
+| `checkpoint.manifest.json` | Full Dropbox file list | Once on first scan |
+| `checkpoint.folders.json` | Dropbox path → Google Drive folder ID map | As folders are created |
+
+Legacy single-file checkpoints are still loaded; the next save splits them automatically.
 
 ## Development
 

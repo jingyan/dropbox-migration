@@ -66,7 +66,7 @@ class Migrator:
         checkpoint = self.checkpoint_store.load()
         root_folder_id = checkpoint.gdrive_root_folder_id or self._ensure_root_folder()
         checkpoint.gdrive_root_folder_id = root_folder_id
-        self.checkpoint_store.save(checkpoint)
+        self.checkpoint_store.save(checkpoint, parts=frozenset({"state"}))
 
         files = self._discover_files(checkpoint)
         checkpoint.stats.files_discovered = len(files)
@@ -77,7 +77,7 @@ class Migrator:
             logger.info("No pending files to migrate")
             return MigrationResult(checkpoint=checkpoint, success=checkpoint.stats.files_failed == 0)
 
-        self._prebuild_folder_map([task.rel_path for task in pending], root_folder_id)
+        self._prebuild_folder_map([task.rel_path for task in pending], root_folder_id, checkpoint)
         pending = self._attach_parent_ids(pending, root_folder_id)
 
         progress = MigrationProgressTracker(
@@ -94,7 +94,7 @@ class Migrator:
             self._run_parallel(pending, checkpoint, progress)
 
         progress.log_summary()
-        self.checkpoint_store.save(checkpoint)
+        self.checkpoint_store.save(checkpoint)  # all parts
         success = checkpoint.stats.files_failed == 0
         logger.info(
             "Migration finished: migrated=%d skipped=%d failed=%d bytes=%d",
@@ -129,7 +129,7 @@ class Migrator:
             for file_entry in files
         }
         checkpoint.updated_at = datetime.now(UTC).isoformat()
-        self.checkpoint_store.save(checkpoint)
+        self.checkpoint_store.save(checkpoint, parts=frozenset({"state", "manifest"}))
         logger.info("Saved file manifest with %d files", len(files))
         return files
 
@@ -166,13 +166,36 @@ class Migrator:
             return root_folder_id
         return self._folder_cache["/".join(parts[:-1])]
 
-    def _prebuild_folder_map(self, rel_paths: list[str], root_folder_id: str) -> None:
+    def _prebuild_folder_map(
+        self,
+        rel_paths: list[str],
+        root_folder_id: str,
+        checkpoint: Checkpoint,
+    ) -> None:
         folder_paths = collect_folder_paths(rel_paths)
         if not folder_paths:
             return
-        logger.info("Ensuring %d Google Drive folders exist", len(folder_paths))
-        self._folder_cache.clear()
-        for index, folder_path in enumerate(folder_paths, start=1):
+
+        self._folder_cache = dict(checkpoint.folder_map)
+        cached_count = sum(1 for folder_path in folder_paths if folder_path in self._folder_cache)
+        needed_count = len(folder_paths) - cached_count
+
+        if cached_count:
+            logger.info(
+                "Using cached folder map (%d/%d folders already known)",
+                cached_count,
+                len(folder_paths),
+            )
+        if needed_count == 0:
+            logger.info("All required folders already cached; skipping Drive folder setup")
+            return
+
+        logger.info("Creating %d new Google Drive folders", needed_count)
+        created = 0
+        for folder_path in folder_paths:
+            if folder_path in self._folder_cache:
+                continue
+
             parent_id = root_folder_id
             if "/" in folder_path:
                 parent_key = folder_path.rsplit("/", 1)[0]
@@ -180,8 +203,15 @@ class Migrator:
             folder_name = folder_path.rsplit("/", 1)[-1]
             folder_id = self.gdrive.ensure_folder(folder_name, parent_id)
             self._folder_cache[folder_path] = folder_id
-            if index % 50 == 0 or index == len(folder_paths):
-                logger.info("Folder setup progress: %d/%d", index, len(folder_paths))
+            checkpoint.folder_map[folder_path] = folder_id
+            created += 1
+            checkpoint.updated_at = datetime.now(UTC).isoformat()
+            if created % 50 == 0 or created == needed_count:
+                logger.info("Folder setup progress: %d/%d new folders", created, needed_count)
+                self.checkpoint_store.save(checkpoint, parts=frozenset({"folders"}))
+
+        if created % 50 != 0:
+            self.checkpoint_store.save(checkpoint, parts=frozenset({"folders"}))
 
     def _run_sequential(
         self,
@@ -278,4 +308,4 @@ class Migrator:
     ) -> None:
         with self._checkpoint_lock:
             mark_fn(*args)
-            self.checkpoint_store.save(checkpoint)
+            self.checkpoint_store.save(checkpoint, parts=frozenset({"state"}))
